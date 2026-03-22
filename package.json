@@ -1,0 +1,25 @@
+{
+  "name": "live-code-runner",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "start": "concurrently \"npm run start:server\" \"npm run start:client\"",
+    "start:client": "react-scripts start",
+    "start:server": "node server.js",
+    "build": "react-scripts build",
+    "test": "react-scripts test",
+    "init-db": "node init-db.js",
+    "setup-dev": "node setup-dev.js",
+    "test-app": "node test-app.js"
+  },
+  "dependencies": {
+    "axios": "^1.4.0",
+    "concurrently": "^8.2.0",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "pg": "^8.11.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-scripts": "5.0.1"
+  }
+}
