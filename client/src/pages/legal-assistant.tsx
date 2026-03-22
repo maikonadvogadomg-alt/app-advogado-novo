@@ -1957,6 +1957,12 @@ export default function LegalAssistant() {
                 <span className="hidden sm:inline">Previdenciário</span>
               </Button>
             </Link>
+            <Link href="/robo">
+              <Button size="sm" variant="ghost" className="gap-1 text-xs text-muted-foreground" data-testid="button-go-robo">
+                <Cpu className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Robô Jurídico</span>
+              </Button>
+            </Link>
             <Button
               size="sm"
               variant="ghost"

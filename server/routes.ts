@@ -2966,10 +2966,38 @@ REGRAS FIXAS: Mantenha dados pessoais exatos. Texto puro sem markdown. Use histo
   });
 
   // ─── App Settings ─────────────────────────────────────────────────────────
+  // Chaves sensíveis que devem ser mascaradas nas respostas por padrão
+  const SENSITIVE_SETTING_KEYS = new Set([
+    "tramitacao_token", "gemini_api_key", "openai_api_key",
+    "datajud_api_key", "djen_token", "pdpj_pem_private_key",
+    "app_password", "session_secret",
+  ]);
+
+  function maskValue(key: string, value: string, reveal: boolean): string {
+    if (!reveal && SENSITIVE_SETTING_KEYS.has(key.toLowerCase())) {
+      if (value.length <= 8) return "****";
+      return value.slice(0, 4) + "****" + value.slice(-4);
+    }
+    return value;
+  }
+
+  app.get("/api/settings", requireAuth, async (req, res) => {
+    try {
+      const reveal = req.query.reveal === "1";
+      const all = await storage.getAllSettings();
+      const masked = all.map((s) => ({ ...s, value: maskValue(s.key, s.value, reveal) }));
+      res.json(masked);
+    } catch (e: any) {
+      res.status(500).json({ message: e.message });
+    }
+  });
+
   app.get("/api/settings/:key", requireAuth, async (req, res) => {
     try {
+      const reveal = req.query.reveal === "1";
       const value = await storage.getSetting(req.params.key);
-      res.json({ value });
+      if (value === null) return res.json({ value: null });
+      res.json({ value: maskValue(req.params.key, value, reveal) });
     } catch (e: any) {
       res.status(500).json({ message: e.message });
     }
@@ -3337,6 +3365,147 @@ ${texto.slice(0, 12000)}`;
       res.json({ data, tipo });
     } catch (e: any) {
       console.error("[previdenciario/extrair]", e.message);
+      res.status(500).json({ message: e.message });
+    }
+  });
+
+  // ─── Stored Files (PEM, chaves, configs pequenas) ─────────────────────────
+  const MAX_FILE_SIZE = 256 * 1024; // 256 KB
+  const ALLOWED_MIMES = new Set([
+    "application/x-pem-file", "application/x-x509-ca-cert",
+    "application/pkcs8", "text/plain", "application/json",
+    "application/octet-stream",
+  ]);
+
+  const uploadSmall = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: MAX_FILE_SIZE },
+  });
+
+  app.get("/api/files", requireAuth, async (_req, res) => {
+    try {
+      const files = await storage.getStoredFiles();
+      // Never return file content in the list view
+      const safe = files.map(({ contentText: _t, contentBase64: _b, ...rest }) => rest);
+      res.json(safe);
+    } catch (e: any) {
+      res.status(500).json({ message: e.message });
+    }
+  });
+
+  app.post("/api/files", requireAuth, uploadSmall.single("file"), async (req, res) => {
+    try {
+      if (!req.file) return res.status(400).json({ message: "Nenhum arquivo enviado." });
+      const { originalname, mimetype, buffer, size } = req.file;
+      if (size > MAX_FILE_SIZE) {
+        return res.status(413).json({ message: `Arquivo muito grande. Máximo: ${MAX_FILE_SIZE / 1024} KB.` });
+      }
+      // Validate MIME type
+      const effectiveMime = mimetype || "application/octet-stream";
+      const lowerName = originalname.toLowerCase();
+      const isPemByName = lowerName.endsWith(".pem") || lowerName.endsWith(".key") || lowerName.endsWith(".crt") || lowerName.endsWith(".cer");
+      const isAllowedMime = ALLOWED_MIMES.has(effectiveMime) || isPemByName;
+      if (!isAllowedMime) {
+        return res.status(400).json({ message: `Tipo de arquivo não permitido: ${effectiveMime}. Aceitos: PEM, chaves e arquivos de texto/configuração.` });
+      }
+      const category = (req.body.category as string) || "other";
+      const settingKey = (req.body.settingKey as string) || undefined;
+      // Use mime type (not extension) as primary indicator of text content
+      const isText = effectiveMime.startsWith("text/") || isPemByName;
+      const created = await storage.createStoredFile({
+        name: originalname,
+        mime: effectiveMime,
+        sizeBytes: String(size),
+        contentText: isText ? buffer.toString("utf8") : undefined,
+        contentBase64: !isText ? buffer.toString("base64") : undefined,
+        category,
+        settingKey,
+      });
+      // If linked to a setting key, also persist value in app_settings
+      if (settingKey) {
+        const content = isText ? buffer.toString("utf8") : buffer.toString("base64");
+        await storage.setSetting(settingKey, content);
+      }
+      res.json({ id: created.id, name: created.name, size, category });
+    } catch (e: any) {
+      res.status(500).json({ message: e.message });
+    }
+  });
+
+  app.get("/api/files/:id", requireAuth, async (req, res) => {
+    try {
+      const file = await storage.getStoredFile(req.params.id);
+      if (!file) return res.status(404).json({ message: "Arquivo não encontrado." });
+      const reveal = req.query.reveal === "1";
+      if (!reveal) {
+        const { contentText: _t, contentBase64: _b, ...safe } = file;
+        return res.json({ ...safe, masked: true });
+      }
+      res.json(file);
+    } catch (e: any) {
+      res.status(500).json({ message: e.message });
+    }
+  });
+
+  app.delete("/api/files/:id", requireAuth, async (req, res) => {
+    try {
+      await storage.deleteStoredFile(req.params.id);
+      res.json({ ok: true });
+    } catch (e: any) {
+      res.status(500).json({ message: e.message });
+    }
+  });
+
+  // ─── Robô Jurídico — execução e log ────────────────────────────────────────
+  app.get("/api/robo/runs", requireAuth, async (_req, res) => {
+    try {
+      const runs = await storage.getRoboRuns();
+      res.json(runs);
+    } catch (e: any) {
+      res.status(500).json({ message: e.message });
+    }
+  });
+
+  app.post("/api/robo/run", requireAuth, async (_req, res) => {
+    let runId: string | undefined;
+    try {
+      const run = await storage.createRoboRun();
+      runId = run.id;
+      const result = RoboJuridicoController.executar_robo();
+      const output = JSON.stringify(result.data || {});
+      const error = result.error || undefined;
+      const status = result.success ? "success" : "error";
+      await storage.finishRoboRun(runId, status, output, error);
+      res.json({ runId, ...result });
+    } catch (e: any) {
+      if (runId) {
+        await storage.finishRoboRun(runId, "error", undefined, e.message).catch(() => {});
+      }
+      res.status(500).json({ message: e.message });
+    }
+  });
+
+  // Vercel Cron endpoint — chamado via GET para compatibilidade com cron jobs do Vercel
+  app.get("/api/robo/cron", async (req, res) => {
+    // CRON_SECRET é obrigatório para proteger este endpoint
+    const cronSecret = process.env.CRON_SECRET;
+    if (!cronSecret || req.headers["authorization"] !== `Bearer ${cronSecret}`) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+    let runId: string | undefined;
+    try {
+      const run = await storage.createRoboRun();
+      runId = run.id;
+      const result = RoboJuridicoController.executar_robo();
+      const output = JSON.stringify(result.data || {});
+      const error = result.error || undefined;
+      const status = result.success ? "success" : "error";
+      await storage.finishRoboRun(runId, status, output, error);
+      res.json({ runId, ...result });
+    } catch (e: any) {
+      if (runId) {
+        await storage.finishRoboRun(runId, "error", undefined, e.message).catch(() => {});
+      }
       res.status(500).json({ message: e.message });
     }
   });

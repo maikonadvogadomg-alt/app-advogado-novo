@@ -184,3 +184,48 @@ export const tramitacaoPublicacoes = pgTable("tramitacao_publicacoes", {
 
 export type AppSetting = typeof appSettings.$inferSelect;
 export type TramitacaoPublicacao = typeof tramitacaoPublicacoes.$inferSelect;
+
+// ── Stored Files (PEM keys, configs, small attachments) ─────────────────────
+export const storedFiles = pgTable("stored_files", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  mime: text("mime").notNull().default("application/octet-stream"),
+  sizeBytes: text("size_bytes").notNull().default("0"),
+  contentText: text("content_text"),
+  contentBase64: text("content_base64"),
+  category: text("category").notNull().default("other"),
+  settingKey: text("setting_key"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertStoredFileSchema = createInsertSchema(storedFiles).pick({
+  name: true,
+  mime: true,
+  sizeBytes: true,
+  contentText: true,
+  contentBase64: true,
+  category: true,
+  settingKey: true,
+});
+
+export type StoredFile = typeof storedFiles.$inferSelect;
+export type InsertStoredFile = z.infer<typeof insertStoredFileSchema>;
+
+// ── Robo Runs (execution log) ────────────────────────────────────────────────
+export const roboRuns = pgTable("robo_runs", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  startedAt: timestamp("started_at").defaultNow().notNull(),
+  finishedAt: timestamp("finished_at"),
+  status: text("status").notNull().default("pending"),
+  output: text("output"),
+  error: text("error"),
+});
+
+export const insertRoboRunSchema = createInsertSchema(roboRuns).pick({
+  status: true,
+  output: true,
+  error: true,
+});
+
+export type RoboRun = typeof roboRuns.$inferSelect;
+export type InsertRoboRun = z.infer<typeof insertRoboRunSchema>;
