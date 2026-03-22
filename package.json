@@ -9,6 +9,7 @@
     "preview": "vite preview",
     "server": "tsx server/index.ts",
     "setup:db": "node scripts/setup_database.js",
+    "db:migrate": "node scripts/db_migrate.js",
     "migrate": "node scripts/run_migration.js",
     "robo:test": "python script/robo_juridico_test.py",
     "robo:status": "curl -X GET http://localhost:5000/api/robo-juridico/status -H \"Content-Type: application/json\"",

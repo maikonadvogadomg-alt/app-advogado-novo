@@ -87,6 +87,7 @@ import ConsultaPdpj from "@/pages/consulta-pdpj";
 import TramitacaoPage from "@/pages/tramitacao";
 import FiltradorJuridico from "@/pages/filtrador";
 import PrevidenciarioPage from "@/pages/previdenciario";
+import RoboJuridico from "@/pages/robo-juridico";
 import LoginPage from "@/pages/login";
 
 function Router() {
@@ -105,6 +106,7 @@ function Router() {
       <Route path="/tramitacao" component={TramitacaoPage} />
       <Route path="/filtrador" component={FiltradorJuridico} />
       <Route path="/previdenciario" component={PrevidenciarioPage} />
+      <Route path="/robo" component={RoboJuridico} />
       <Route component={NotFound} />
     </Switch>
   );

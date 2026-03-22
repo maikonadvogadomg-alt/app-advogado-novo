@@ -49,14 +49,14 @@ if (!MOCK_MODE && process.env.DATABASE_URL) {
   const pg = (await import("pg")).default;
   const PgSession = connectPg(session);
 
-  // 🔒 SSL obrigatório para Neon PostgreSQL (serverless)
+  // 🔒 SSL para Neon PostgreSQL; rejectUnauthorized:false aceita cert Neon sem CA bundle
   const requireSsl =
     process.env.DATABASE_URL?.includes("neon.tech") ||
     process.env.DATABASE_URL?.includes("sslmode=require");
 
   const sessionPool = new pg.Pool({
     connectionString: process.env.DATABASE_URL,
-    ssl: requireSsl ? { rejectUnauthorized: true } : false,
+    ssl: requireSsl ? { rejectUnauthorized: false } : false,
   });
 
   app.use(session({
@@ -131,6 +131,24 @@ app.use((req, res, next) => {
 });
 
 (async () => {
+  // ── Verificação de saúde do banco de dados ────────────────────────────────
+  if (process.env.DATABASE_URL) {
+    try {
+      const { pool } = await import("./storage");
+      await pool.query("SELECT 1");
+      log("✅ Banco de dados conectado com sucesso.", "db");
+    } catch (err: any) {
+      log(
+        `⚠️  Não foi possível conectar ao banco de dados: ${err.message}\n` +
+        "   → Verifique DATABASE_URL e execute 'npm run db:migrate' para criar as tabelas.",
+        "db"
+      );
+      // Não aborta o processo — app roda em modo degradado se DB indisponível
+    }
+  } else {
+    log("⚠️  DATABASE_URL não definido — persistência desabilitada.", "db");
+  }
+
   await registerRoutes(httpServer, app);
 
   app.use((err: any, _req: Request, res: Response, next: NextFunction) => {

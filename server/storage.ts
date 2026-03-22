@@ -1,4 +1,4 @@
-import { type User, type InsertUser, type Snippet, type InsertSnippet, type CustomAction, type InsertCustomAction, type Ementa, type InsertEmenta, type AiHistory, type InsertAiHistory, type PromptTemplate, type InsertPromptTemplate, type DocTemplate, type InsertDocTemplate, type SharedParecer, type ProcessoMonitorado, type InsertProcessoMonitorado, type AppSetting, type TramitacaoPublicacao, users, snippets, customActions, ementas, aiHistory, promptTemplates, docTemplates, sharedPareceres, processosMonitorados, appSettings, tramitacaoPublicacoes } from "@shared/schema";
+import { type User, type InsertUser, type Snippet, type InsertSnippet, type CustomAction, type InsertCustomAction, type Ementa, type InsertEmenta, type AiHistory, type InsertAiHistory, type PromptTemplate, type InsertPromptTemplate, type DocTemplate, type InsertDocTemplate, type SharedParecer, type ProcessoMonitorado, type InsertProcessoMonitorado, type AppSetting, type TramitacaoPublicacao, type StoredFile, type InsertStoredFile, type RoboRun, users, snippets, customActions, ementas, aiHistory, promptTemplates, docTemplates, sharedPareceres, processosMonitorados, appSettings, tramitacaoPublicacoes, storedFiles, roboRuns } from "@shared/schema";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { eq, desc } from "drizzle-orm";
 import pg from "pg";
@@ -10,10 +10,12 @@ const requireSsl =
 
 const pool = new pg.Pool({
   connectionString: process.env.DATABASE_URL,
-  // SSL obrigatório para Neon PostgreSQL (serverless)
-  ssl: requireSsl ? { rejectUnauthorized: true } : false,
+  // SSL para Neon PostgreSQL (serverless); rejectUnauthorized:false para aceitar
+  // o certificado Neon mesmo sem CA bundle completo no ambiente de deploy.
+  ssl: requireSsl ? { rejectUnauthorized: false } : false,
 });
 
+export { pool };
 export const db = drizzle(pool);
 
 export interface IStorage {
@@ -251,6 +253,10 @@ export class DatabaseStorage implements IStorage {
     });
   }
 
+  async getAllSettings(): Promise<AppSetting[]> {
+    return db.select().from(appSettings);
+  }
+
   async getTramitacaoPublicacoes(limit = 100): Promise<TramitacaoPublicacao[]> {
     return db.select().from(tramitacaoPublicacoes).orderBy(desc(tramitacaoPublicacoes.createdAt)).limit(limit);
   }
@@ -280,6 +286,39 @@ export class DatabaseStorage implements IStorage {
 
   async markPublicacaoLida(id: string, lida: string): Promise<void> {
     await db.update(tramitacaoPublicacoes).set({ lida }).where(eq(tramitacaoPublicacoes.id, id));
+  }
+
+  // ── Stored Files ────────────────────────────────────────────────────────────
+  async getStoredFiles(): Promise<StoredFile[]> {
+    return db.select().from(storedFiles).orderBy(desc(storedFiles.createdAt));
+  }
+
+  async getStoredFile(id: string): Promise<StoredFile | undefined> {
+    const [file] = await db.select().from(storedFiles).where(eq(storedFiles.id, id));
+    return file;
+  }
+
+  async createStoredFile(data: InsertStoredFile): Promise<StoredFile> {
+    const [created] = await db.insert(storedFiles).values(data).returning();
+    return created;
+  }
+
+  async deleteStoredFile(id: string): Promise<void> {
+    await db.delete(storedFiles).where(eq(storedFiles.id, id));
+  }
+
+  // ── Robo Runs ───────────────────────────────────────────────────────────────
+  async getRoboRuns(limit = 50): Promise<RoboRun[]> {
+    return db.select().from(roboRuns).orderBy(desc(roboRuns.startedAt)).limit(limit);
+  }
+
+  async createRoboRun(): Promise<RoboRun> {
+    const [run] = await db.insert(roboRuns).values({ status: "running" }).returning();
+    return run;
+  }
+
+  async finishRoboRun(id: string, status: string, output?: string, error?: string): Promise<void> {
+    await db.update(roboRuns).set({ status, output, error, finishedAt: new Date() }).where(eq(roboRuns.id, id));
   }
 }
 
