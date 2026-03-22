@@ -9,6 +9,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "@/components/theme-provider";
 import { PwaInstallBanner } from "@/components/pwa-install";
+import {LoginPage} from "@/pages/login";
 
 class ErrorBoundary extends Component<
   { children: React.ReactNode },
