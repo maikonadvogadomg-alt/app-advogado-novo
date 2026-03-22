@@ -9,6 +9,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "@/components/theme-provider";
 import { PwaInstallBanner } from "@/components/pwa-install";
+import { Analytics } from "@vercel/analytics/react";
 
 class ErrorBoundary extends Component<
   { children: React.ReactNode },
@@ -157,6 +158,7 @@ function App() {
           <ErrorBoundary>
             <Router />
           </ErrorBoundary>
+          <Analytics />
         </TooltipProvider>
       </QueryClientProvider>
     </ThemeProvider>
