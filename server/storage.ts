@@ -1,7 +1,8 @@
-import { type User, type InsertUser, type Snippet, type InsertSnippet, type CustomAction, type InsertCustomAction, type Ementa, type InsertEmenta, type AiHistory, type InsertAiHistory, type PromptTemplate, type InsertPromptTemplate, type DocTemplate, type InsertDocTemplate, type SharedParecer, type ProcessoMonitorado, type InsertProcessoMonitorado, type AppSetting, type TramitacaoPublicacao, users, snippets, customActions, ementas, aiHistory, promptTemplates, docTemplates, sharedPareceres, processosMonitorados, appSettings, tramitacaoPublicacoes } from "@shared/schema";
+import { type User, type InsertUser, type Snippet, type InsertSnippet, type CustomAction, type InsertCustomAction, type Ementa, type InsertEmenta, type AiHistory, type InsertAiHistory, type PromptTemplate, type InsertPromptTemplate, type DocTemplate, type InsertDocTemplate, type SharedParecer, type ProcessoMonitorado, type InsertProcessoMonitorado, type AppSetting, type TramitacaoPublicacao, type Conversation, type Message, users, snippets, customActions, ementas, aiHistory, promptTemplates, docTemplates, sharedPareceres, processosMonitorados, appSettings, tramitacaoPublicacoes, conversations, messages } from "@shared/schema";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { eq, desc } from "drizzle-orm";
 import pg from "pg";
+import { randomUUID } from "crypto";
 
 // 🔒 Detecta conexão Neon ou qualquer host com sslmode=require
 const requireSsl =
@@ -23,6 +24,7 @@ export interface IStorage {
   getSnippets(): Promise<Snippet[]>;
   getSnippet(id: string): Promise<Snippet | undefined>;
   createSnippet(snippet: InsertSnippet): Promise<Snippet>;
+  updateSnippet(id: string, data: Partial<InsertSnippet>): Promise<Snippet | undefined>;
   updateSnippetTitle(id: string, title: string): Promise<Snippet | undefined>;
   deleteSnippet(id: string): Promise<void>;
   getCustomActions(): Promise<CustomAction[]>;
@@ -56,6 +58,13 @@ export interface IStorage {
   createProcessoMonitorado(p: InsertProcessoMonitorado): Promise<ProcessoMonitorado>;
   updateProcessoMonitorado(id: string, data: Partial<InsertProcessoMonitorado>): Promise<ProcessoMonitorado | undefined>;
   deleteProcessoMonitorado(id: string): Promise<void>;
+  // Conversation methods (chat history)
+  getConversations?(): Promise<any[]>;
+  getConversation?(id: number): Promise<any | undefined>;
+  createConversation?(title: string): Promise<any>;
+  deleteConversation?(id: number): Promise<void>;
+  getMessagesByConversation?(conversationId: number): Promise<any[]>;
+  createMessage?(conversationId: number, role: string, content: string): Promise<any>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -85,6 +94,11 @@ export class DatabaseStorage implements IStorage {
 
   async createSnippet(insertSnippet: InsertSnippet): Promise<Snippet> {
     const [snippet] = await db.insert(snippets).values(insertSnippet).returning();
+    return snippet;
+  }
+
+  async updateSnippet(id: string, data: Partial<InsertSnippet>): Promise<Snippet | undefined> {
+    const [snippet] = await db.update(snippets).set(data).where(eq(snippets.id, id)).returning();
     return snippet;
   }
 
@@ -283,4 +297,256 @@ export class DatabaseStorage implements IStorage {
   }
 }
 
-export const storage = new DatabaseStorage();
+// ── MemoryStorage: fallback quando DATABASE_URL não está configurado ──────────
+export class MemoryStorage implements IStorage {
+  private _users: Map<string, User> = new Map();
+  private _snippets: Map<string, Snippet> = new Map();
+  private _customActions: Map<string, CustomAction> = new Map();
+  private _ementas: Map<string, Ementa> = new Map();
+  private _aiHistory: AiHistory[] = [];
+  private _promptTemplates: Map<string, PromptTemplate> = new Map();
+  private _docTemplates: Map<string, DocTemplate> = new Map();
+  private _sharedPareceres: Map<string, SharedParecer> = new Map();
+  private _processos: Map<string, ProcessoMonitorado> = new Map();
+
+  async getUser(id: string) { return this._users.get(id); }
+  async getUserByUsername(username: string) {
+    return [...this._users.values()].find((u) => u.username === username);
+  }
+  async createUser(u: InsertUser): Promise<User> {
+    const user: User = { id: randomUUID(), ...u };
+    this._users.set(user.id, user);
+    return user;
+  }
+
+  async getSnippets() { return [...this._snippets.values()]; }
+  async getSnippet(id: string) { return this._snippets.get(id); }
+  async createSnippet(s: InsertSnippet): Promise<Snippet> {
+    const snippet: Snippet = { id: randomUUID(), title: "Untitled", html: "", css: "", js: "", mode: "html", ...s };
+    this._snippets.set(snippet.id, snippet);
+    return snippet;
+  }
+  async updateSnippet(id: string, data: Partial<InsertSnippet>): Promise<Snippet | undefined> {
+    const existing = this._snippets.get(id);
+    if (!existing) return undefined;
+    const updated = { ...existing, ...data };
+    this._snippets.set(id, updated);
+    return updated;
+  }
+  async updateSnippetTitle(id: string, title: string): Promise<Snippet | undefined> {
+    return this.updateSnippet(id, { title });
+  }
+  async deleteSnippet(id: string) { this._snippets.delete(id); }
+
+  async getCustomActions() { return [...this._customActions.values()]; }
+  async getCustomAction(id: string) { return this._customActions.get(id); }
+  async createCustomAction(a: InsertCustomAction): Promise<CustomAction> {
+    const action: CustomAction = { id: randomUUID(), description: "", ...a };
+    this._customActions.set(action.id, action);
+    return action;
+  }
+  async updateCustomAction(id: string, a: InsertCustomAction): Promise<CustomAction | undefined> {
+    const existing = this._customActions.get(id);
+    if (!existing) return undefined;
+    const updated = { ...existing, ...a };
+    this._customActions.set(id, updated);
+    return updated;
+  }
+  async deleteCustomAction(id: string) { this._customActions.delete(id); }
+
+  async getEmentas() { return [...this._ementas.values()]; }
+  async getEmenta(id: string) { return this._ementas.get(id); }
+  async createEmenta(e: InsertEmenta): Promise<Ementa> {
+    const ementa: Ementa = { id: randomUUID(), categoria: "Geral", ...e };
+    this._ementas.set(ementa.id, ementa);
+    return ementa;
+  }
+  async updateEmenta(id: string, e: InsertEmenta): Promise<Ementa | undefined> {
+    const existing = this._ementas.get(id);
+    if (!existing) return undefined;
+    const updated = { ...existing, ...e };
+    this._ementas.set(id, updated);
+    return updated;
+  }
+  async deleteEmenta(id: string) { this._ementas.delete(id); }
+
+  async getAiHistory() { return [...this._aiHistory].reverse(); }
+  async createAiHistory(entry: InsertAiHistory): Promise<AiHistory> {
+    const h: AiHistory = { id: randomUUID(), inputPreview: "", createdAt: new Date(), ...entry };
+    this._aiHistory.push(h);
+    return h;
+  }
+  async deleteAiHistory(id: string) {
+    this._aiHistory = this._aiHistory.filter((h) => h.id !== id);
+  }
+  async clearAiHistory() { this._aiHistory = []; }
+
+  async getPromptTemplates() { return [...this._promptTemplates.values()]; }
+  async getPromptTemplate(id: string) { return this._promptTemplates.get(id); }
+  async createPromptTemplate(t: InsertPromptTemplate): Promise<PromptTemplate> {
+    const template: PromptTemplate = { id: randomUUID(), categoria: "Geral", ...t };
+    this._promptTemplates.set(template.id, template);
+    return template;
+  }
+  async updatePromptTemplate(id: string, t: InsertPromptTemplate): Promise<PromptTemplate | undefined> {
+    const existing = this._promptTemplates.get(id);
+    if (!existing) return undefined;
+    const updated = { ...existing, ...t };
+    this._promptTemplates.set(id, updated);
+    return updated;
+  }
+  async deletePromptTemplate(id: string) { this._promptTemplates.delete(id); }
+
+  async getDocTemplates() { return [...this._docTemplates.values()]; }
+  async getDocTemplate(id: string) { return this._docTemplates.get(id); }
+  async createDocTemplate(t: InsertDocTemplate): Promise<DocTemplate> {
+    const template: DocTemplate = { id: randomUUID(), categoria: "Geral", docxBase64: null, docxFilename: null, ...t };
+    this._docTemplates.set(template.id, template);
+    return template;
+  }
+  async updateDocTemplate(id: string, t: InsertDocTemplate): Promise<DocTemplate | undefined> {
+    const existing = this._docTemplates.get(id);
+    if (!existing) return undefined;
+    const updated = { ...existing, ...t };
+    this._docTemplates.set(id, updated);
+    return updated;
+  }
+  async deleteDocTemplate(id: string) { this._docTemplates.delete(id); }
+
+  async getSharedParecer(id: string) { return this._sharedPareceres.get(id); }
+  async createSharedParecer(id: string, html: string, processo: string): Promise<SharedParecer> {
+    const parecer: SharedParecer = { id, html, processo, createdAt: new Date() };
+    this._sharedPareceres.set(id, parecer);
+    return parecer;
+  }
+
+  async getProcessosMonitorados() { return [...this._processos.values()]; }
+  async getProcessoMonitorado(id: string) { return this._processos.get(id); }
+  async createProcessoMonitorado(p: InsertProcessoMonitorado): Promise<ProcessoMonitorado> {
+    const processo: ProcessoMonitorado = {
+      id: randomUUID(),
+      apelido: "",
+      classe: "",
+      orgaoJulgador: "",
+      dataAjuizamento: "",
+      ultimaMovimentacao: "",
+      ultimaMovimentacaoData: "",
+      assuntos: "",
+      status: "ativo",
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      ...p,
+    };
+    this._processos.set(processo.id, processo);
+    return processo;
+  }
+  async updateProcessoMonitorado(id: string, data: Partial<InsertProcessoMonitorado>): Promise<ProcessoMonitorado | undefined> {
+    const existing = this._processos.get(id);
+    if (!existing) return undefined;
+    const updated = { ...existing, ...data, updatedAt: new Date() };
+    this._processos.set(id, updated);
+    return updated;
+  }
+  async deleteProcessoMonitorado(id: string) { this._processos.delete(id); }
+}
+
+// Exporta a instância correta conforme DATABASE_URL
+let _storage: IStorage;
+if (process.env.DATABASE_URL) {
+  _storage = new DatabaseStorage();
+} else {
+  console.warn(
+    "⚠️  [SEM BANCO] DATABASE_URL não configurada — usando armazenamento em memória.\n" +
+    "    Os dados serão perdidos ao reiniciar o servidor.\n" +
+    "    Configure DATABASE_URL para persistência permanente."
+  );
+  _storage = new MemoryStorage();
+}
+
+export const storage: IStorage = _storage;
+
+// ── ConversationStorage: métodos de persistência de chat ─────────────────────
+export class ConversationDatabaseStorage {
+  async getConversations(): Promise<Conversation[]> {
+    return db.select().from(conversations).orderBy(desc(conversations.updatedAt));
+  }
+
+  async getConversation(id: number): Promise<Conversation | undefined> {
+    const [conv] = await db.select().from(conversations).where(eq(conversations.id, id));
+    return conv;
+  }
+
+  async createConversation(title: string): Promise<Conversation> {
+    const [conv] = await db.insert(conversations).values({ title }).returning();
+    return conv;
+  }
+
+  async deleteConversation(id: number): Promise<void> {
+    await db.delete(messages).where(eq(messages.conversationId, id));
+    await db.delete(conversations).where(eq(conversations.id, id));
+  }
+
+  async getMessagesByConversation(conversationId: number): Promise<Message[]> {
+    return db.select().from(messages).where(eq(messages.conversationId, conversationId)).orderBy(messages.createdAt);
+  }
+
+  async createMessage(conversationId: number, role: string, content: string): Promise<Message> {
+    const [msg] = await db.insert(messages).values({ conversationId, role, content }).returning();
+    // Update conversation updatedAt
+    await db.update(conversations).set({ updatedAt: new Date() }).where(eq(conversations.id, conversationId));
+    return msg;
+  }
+}
+
+export class ConversationMemoryStorage {
+  private _conversations: Map<number, Conversation> = new Map();
+  private _messages: Message[] = [];
+  private _nextConvId = 1;
+  private _nextMsgId = 1;
+
+  async getConversations(): Promise<Conversation[]> {
+    return [...this._conversations.values()].sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
+  }
+
+  async getConversation(id: number): Promise<Conversation | undefined> {
+    return this._conversations.get(id);
+  }
+
+  async createConversation(title: string): Promise<Conversation> {
+    const conv: Conversation = { id: this._nextConvId++, title, createdAt: new Date(), updatedAt: new Date() };
+    this._conversations.set(conv.id, conv);
+    return conv;
+  }
+
+  async deleteConversation(id: number): Promise<void> {
+    this._conversations.delete(id);
+    this._messages = this._messages.filter((m) => m.conversationId !== id);
+  }
+
+  async getMessagesByConversation(conversationId: number): Promise<Message[]> {
+    return this._messages.filter((m) => m.conversationId === conversationId);
+  }
+
+  async createMessage(conversationId: number, role: string, content: string): Promise<Message> {
+    const msg: Message = { id: this._nextMsgId++, conversationId, role, content, createdAt: new Date() };
+    this._messages.push(msg);
+    const conv = this._conversations.get(conversationId);
+    if (conv) this._conversations.set(conversationId, { ...conv, updatedAt: new Date() });
+    return msg;
+  }
+}
+
+// Extende o storage principal com capacidade de conversas
+const _convStorage = process.env.DATABASE_URL
+  ? new ConversationDatabaseStorage()
+  : new ConversationMemoryStorage();
+
+// Mescla os métodos de conversa no storage exportado
+Object.assign(_storage, {
+  getConversations: _convStorage.getConversations.bind(_convStorage),
+  getConversation: _convStorage.getConversation.bind(_convStorage),
+  createConversation: _convStorage.createConversation.bind(_convStorage),
+  deleteConversation: _convStorage.deleteConversation.bind(_convStorage),
+  getMessagesByConversation: _convStorage.getMessagesByConversation.bind(_convStorage),
+  createMessage: _convStorage.createMessage.bind(_convStorage),
+});

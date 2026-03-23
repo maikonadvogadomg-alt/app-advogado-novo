@@ -88,6 +88,8 @@ import TramitacaoPage from "@/pages/tramitacao";
 import FiltradorJuridico from "@/pages/filtrador";
 import PrevidenciarioPage from "@/pages/previdenciario";
 import LoginPage from "@/pages/login";
+import PlaygroundPython from "@/pages/playground-python";
+import PlaygroundReact from "@/pages/playground-react";
 
 function Router() {
   return (
@@ -95,6 +97,8 @@ function Router() {
       <Route path="/" component={LegalAssistant} />
       <Route path="/assistente">{() => <Redirect to="/" />}</Route>
       <Route path="/playground" component={Playground} />
+      <Route path="/playground-python" component={PlaygroundPython} />
+      <Route path="/playground-react" component={PlaygroundReact} />
       <Route path="/token" component={TokenGenerator} />
       <Route path="/comparador" component={ComparadorJuridico} />
       <Route path="/auditoria" component={AuditoriaFinanceira} />
