@@ -10,6 +10,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "@/components/theme-provider";
 import { PwaInstallBanner } from "@/components/pwa-install";
 import {LoginPage} from "@/pages/login";
+import { SpeedInsights } from "@vercel/speed-insights/react";
 
 class ErrorBoundary extends Component<
   { children: React.ReactNode },
@@ -158,6 +159,7 @@ function App() {
           <ErrorBoundary>
             <Router />
           </ErrorBoundary>
+          <SpeedInsights />
         </TooltipProvider>
       </QueryClientProvider>
     </ThemeProvider>
