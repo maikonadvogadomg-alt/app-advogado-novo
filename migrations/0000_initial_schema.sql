@@ -1,25 +1,130 @@
--- SCHEMA JURÍDICO COMPLETO (13 tabelas + autenticação)
+-- Schema completo para o Assistente Jurídico + Playground
+-- Gerado a partir do Drizzle ORM (shared/schema.ts)
+
 CREATE TABLE IF NOT EXISTS users (
-  id SERIAL PRIMARY KEY,
-  email VARCHAR(255) UNIQUE NOT NULL,
-  name VARCHAR(255) NOT NULL,
-  oab_number VARCHAR(50), -- OAB do advogado
-  role VARCHAR(50) DEFAULT 'advogado',
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+  username TEXT NOT NULL UNIQUE,
+  password TEXT NOT NULL
 );
 
--- 12 TABELAS JURÍDICAS + 1 template inicial
-CREATE TABLE clients (id SERIAL PRIMARY KEY, name VARCHAR(255), cpf_cnpj VARCHAR(20) UNIQUE);
-CREATE TABLE projects (id SERIAL PRIMARY KEY, user_id INTEGER REFERENCES users(id), title VARCHAR(255));
-CREATE TABLE templates (id SERIAL PRIMARY KEY, name VARCHAR(255), content TEXT, variables JSONB);
-CREATE TABLE documents (id SERIAL PRIMARY KEY, project_id INTEGER REFERENCES projects(id), content TEXT);
-CREATE TABLE cases (id SERIAL PRIMARY KEY, project_id INTEGER, client_id INTEGER, case_number VARCHAR(100));
-CREATE TABLE contracts (id SERIAL PRIMARY KEY, project_id INTEGER, client_id INTEGER, value DECIMAL(15,2));
-CREATE TABLE ai_generations (id SERIAL PRIMARY KEY, project_id INTEGER, generated_content TEXT);
--- + 6 outras tabelas (files, notifications, workflows, settings, audit_log)
+CREATE TABLE IF NOT EXISTS snippets (
+  id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+  title TEXT NOT NULL DEFAULT 'Untitled',
+  html TEXT NOT NULL DEFAULT '',
+  css TEXT NOT NULL DEFAULT '',
+  js TEXT NOT NULL DEFAULT '',
+  mode TEXT NOT NULL DEFAULT 'html'
+);
 
--- TEMPLATE INICIAL DE TESTE
-INSERT INTO templates (name, content, variables) VALUES 
-('Petição Inicial', 'EXCELENTÍSSIMO JUÍZO...
-${cliente}, ${oab}...
-REQUER...', '{"cliente":"João Silva", "oab":"MG 12345"}');
+CREATE TABLE IF NOT EXISTS custom_actions (
+  id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+  label TEXT NOT NULL,
+  description TEXT NOT NULL DEFAULT '',
+  prompt TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS ementas (
+  id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+  titulo TEXT NOT NULL,
+  categoria TEXT NOT NULL DEFAULT 'Geral',
+  texto TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS ai_history (
+  id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+  action TEXT NOT NULL,
+  input_preview TEXT NOT NULL DEFAULT '',
+  result TEXT NOT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS prompt_templates (
+  id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+  titulo TEXT NOT NULL,
+  categoria TEXT NOT NULL DEFAULT 'Geral',
+  texto TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS doc_templates (
+  id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+  titulo TEXT NOT NULL,
+  categoria TEXT NOT NULL DEFAULT 'Geral',
+  conteudo TEXT NOT NULL,
+  docx_base64 TEXT,
+  docx_filename TEXT
+);
+
+CREATE TABLE IF NOT EXISTS shared_pareceres (
+  id VARCHAR PRIMARY KEY,
+  html TEXT NOT NULL,
+  processo TEXT NOT NULL DEFAULT '',
+  created_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS processos_monitorados (
+  id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+  numero TEXT NOT NULL,
+  tribunal TEXT NOT NULL,
+  apelido TEXT NOT NULL DEFAULT '',
+  classe TEXT NOT NULL DEFAULT '',
+  orgao_julgador TEXT NOT NULL DEFAULT '',
+  data_ajuizamento TEXT NOT NULL DEFAULT '',
+  ultima_movimentacao TEXT NOT NULL DEFAULT '',
+  ultima_movimentacao_data TEXT NOT NULL DEFAULT '',
+  assuntos TEXT NOT NULL DEFAULT '',
+  status TEXT NOT NULL DEFAULT 'ativo',
+  created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS app_settings (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL,
+  updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS tramitacao_publicacoes (
+  id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+  ext_id TEXT NOT NULL UNIQUE,
+  idempotency_key TEXT,
+  numero_processo TEXT NOT NULL DEFAULT '',
+  numero_processo_mascara TEXT NOT NULL DEFAULT '',
+  tribunal TEXT NOT NULL DEFAULT '',
+  orgao TEXT NOT NULL DEFAULT '',
+  classe TEXT NOT NULL DEFAULT '',
+  texto TEXT NOT NULL DEFAULT '',
+  disponibilizacao_date TEXT NOT NULL DEFAULT '',
+  publicacao_date TEXT NOT NULL DEFAULT '',
+  inicio_prazo_date TEXT NOT NULL DEFAULT '',
+  link_tramitacao TEXT NOT NULL DEFAULT '',
+  link_tribunal TEXT NOT NULL DEFAULT '',
+  destinatarios TEXT NOT NULL DEFAULT '[]',
+  advogados TEXT NOT NULL DEFAULT '[]',
+  lida TEXT NOT NULL DEFAULT 'nao',
+  created_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+-- Sessões (connect-pg-simple)
+CREATE TABLE IF NOT EXISTS "session" (
+  "sid" varchar NOT NULL COLLATE "default",
+  "sess" json NOT NULL,
+  "expire" timestamp(6) NOT NULL,
+  CONSTRAINT "session_pkey" PRIMARY KEY ("sid") NOT DEFERRABLE INITIALLY IMMEDIATE
+);
+CREATE INDEX IF NOT EXISTS "IDX_session_expire" ON "session" ("expire");
+
+-- Tabelas de conversas e mensagens (Robô Jurídico / Chat AI)
+CREATE TABLE IF NOT EXISTS conversations (
+  id SERIAL PRIMARY KEY,
+  title TEXT NOT NULL DEFAULT 'Nova conversa',
+  created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS messages (
+  id SERIAL PRIMARY KEY,
+  conversation_id INTEGER NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+  role TEXT NOT NULL,
+  content TEXT NOT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT NOW()
+);

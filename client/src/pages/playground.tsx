@@ -1239,6 +1239,18 @@ ${html}
             <Trash2 className="w-4 h-4" />
           </Button>
 
+          <div className="h-4 w-px bg-border hidden sm:block" />
+          <Link href="/playground-python">
+            <Button size="sm" variant="ghost" className="h-7 px-2 text-[11px] gap-1 hidden sm:inline-flex" title="Python Playground dedicado">
+              <Terminal className="w-3 h-3 text-yellow-400" /> py
+            </Button>
+          </Link>
+          <Link href="/playground-react">
+            <Button size="sm" variant="ghost" className="h-7 px-2 text-[11px] gap-1 hidden sm:inline-flex" title="React Playground dedicado">
+              <Atom className="w-3 h-3 text-blue-400" /> tsx
+            </Button>
+          </Link>
+
           <Link href="/">
             <Button variant="default" data-testid="button-legal-assistant">
               <Gavel className="w-4 h-4" />

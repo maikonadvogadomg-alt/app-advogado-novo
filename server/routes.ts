@@ -200,7 +200,11 @@ export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
-  await seedData();
+  try {
+    await seedData();
+  } catch (err: any) {
+    console.warn("⚠️  seedData() falhou (banco de dados indisponível?): " + err.message);
+  }
 
   app.get("/sw.js", (req, res) => {
     res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0");
@@ -635,11 +639,17 @@ table.mem tr.cap{background:#dbeafe !important;font-weight:700}
 
   app.patch("/api/snippets/:id", async (req, res) => {
     try {
-      const { title } = req.body;
-      if (!title || typeof title !== "string") {
-        return res.status(400).json({ message: "Title is required" });
+      const { title, html, css, js, mode } = req.body;
+      const updateData: Partial<{ title: string; html: string; css: string; js: string; mode: string }> = {};
+      if (title !== undefined) updateData.title = title;
+      if (html !== undefined) updateData.html = html;
+      if (css !== undefined) updateData.css = css;
+      if (js !== undefined) updateData.js = js;
+      if (mode !== undefined) updateData.mode = mode;
+      if (Object.keys(updateData).length === 0) {
+        return res.status(400).json({ message: "Nenhum campo para atualizar" });
       }
-      const snippet = await storage.updateSnippetTitle(req.params.id, title);
+      const snippet = await storage.updateSnippet(req.params.id, updateData);
       if (!snippet) {
         return res.status(404).json({ message: "Snippet not found" });
       }
@@ -3338,6 +3348,59 @@ ${texto.slice(0, 12000)}`;
     } catch (e: any) {
       console.error("[previdenciario/extrair]", e.message);
       res.status(500).json({ message: e.message });
+    }
+  });
+
+
+  // ── Conversations / Chat History (persistência do histórico de chat) ─────────
+  app.get("/api/conversations", requireAuth, async (_req, res) => {
+    try {
+      const convs = await storage.getConversations?.() ?? [];
+      res.json(convs ?? []);
+    } catch (e) {
+      res.status(500).json({ message: "Erro ao buscar conversas" });
+    }
+  });
+
+  app.post("/api/conversations", requireAuth, async (req, res) => {
+    try {
+      const { title } = req.body;
+      const conv = await storage.createConversation?.(title || "Nova conversa");
+      res.status(201).json(conv);
+    } catch (e) {
+      res.status(500).json({ message: "Erro ao criar conversa" });
+    }
+  });
+
+  app.get("/api/conversations/:id", requireAuth, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const conv = await storage.getConversation?.(id);
+      const msgs = await storage.getMessagesByConversation?.(id) ?? [];
+      res.json({ ...conv, messages: msgs });
+    } catch (e) {
+      res.status(500).json({ message: "Erro ao buscar conversa" });
+    }
+  });
+
+  app.post("/api/conversations/:id/messages", requireAuth, async (req, res) => {
+    try {
+      const conversationId = parseInt(req.params.id);
+      const { role, content } = req.body;
+      const msg = await storage.createMessage?.(conversationId, role || "user", content || "");
+      res.status(201).json(msg);
+    } catch (e) {
+      res.status(500).json({ message: "Erro ao salvar mensagem" });
+    }
+  });
+
+  app.delete("/api/conversations/:id", requireAuth, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      await storage.deleteConversation?.(id);
+      res.status(204).send();
+    } catch (e) {
+      res.status(500).json({ message: "Erro ao excluir conversa" });
     }
   });
 
