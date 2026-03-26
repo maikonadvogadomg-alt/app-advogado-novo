@@ -90,6 +90,18 @@ import PrevidenciarioPage from "@/pages/previdenciario";
 import LoginPage from "@/pages/login";
 import PlaygroundPython from "@/pages/playground-python";
 import PlaygroundReact from "@/pages/playground-react";
+import NotFound from "@/pages/not-found";
+import Home from "@/pages/home";
+import Dashboard from "@/pages/dashboard";
+import Pje from "@/pages/pje";
+import PjeCnj from "@/pages/pje-cnj";
+import Intimacoes from "@/pages/intimacoes";
+import MeuInss from "@/pages/meu-inss";
+import LinhaTempo from "@/pages/linha-tempo";
+import EprocTrf3 from "@/pages/eproc-trf3";
+import PainelAdvogado from "@/pages/painel-advogado";
+import Modelos from "@/pages/modelos";
+import Glossario from "@/pages/glossario
 
 function Router() {
   return (
